@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["crates/tgm_core", "crates/tgm_client"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
