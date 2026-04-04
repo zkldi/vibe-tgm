@@ -1,0 +1,118 @@
+check:
+	#!/bin/bash
+	set -euo pipefail
+
+	source .scripts/multi_evaluator.sh
+
+	evaluate "just fmt-check"
+	evaluate "cargo clippy --workspace --all-targets"
+	# evaluate "bun run --filter '*' lint"
+	# evaluate "just typecheck"
+	evaluate "cargo machete rust/ rust_vendor/ rust_public/"
+	evaluate ".scripts/no_hyphen_filenames.sh"
+
+	post_evaluate
+
+# Automatically fix any issues we can in the codebase and then
+# make a commit for them
+autofix: fmt
+	#!/bin/bash
+	set -euo pipefail
+
+	# Only generate a commit if the repo is clean
+	SHOULD_COMMIT=0
+	if [ -z "$(git status --porcelain)" ]; then
+		SHOULD_COMMIT=1
+	fi
+
+	just gen
+	bun run --filter '*' lint-fix
+	cargo autoinherit
+	cargo machete --fix || true
+
+	if [ $SHOULD_COMMIT -eq 1 ]; then
+		git add .
+		git commit -m "chore: autofix"
+	fi
+
+fmt:
+	cargo fmt --all
+
+fmt-check:
+	cargo fmt --all --check
+
+test:
+	#!/bin/bash
+	set -euo pipefail
+
+	source .scripts/multi_evaluator.sh
+
+	evaluate "just test-rust"
+
+	post_evaluate
+
+test-rust *ARGS:
+	#!/bin/bash
+	set -euo pipefail
+
+	cargo nextest run --workspace {{ARGS}}
+
+	cargo llvm-cov report --html
+	cargo llvm-cov report --lcov --output-path=target/llvm-cov/lcov.info
+
+	NET_ENV_LOCATION=".test.env"
+	if [ "${CI:-}" != "" ]; then
+		NET_ENV_LOCATION=".ci.env"
+	fi
+
+	cd rust/net_server
+	NET_ENV_LOCATION="$NET_ENV_LOCATION" RUNNING_TESTS=1 cargo llvm-cov nextest --lcov --output-path=lcov.info
+
+typecheck:
+	cargo typecheck --workspace
+
+test-cov-view:
+	#!/bin/bash
+	set -euo pipefail
+
+	if [ ! -f target/llvm-cov/html/index.html ]; then
+		echo "No coverage found, run 'just test-rust' first"
+		exit 1
+	fi
+
+	{{ OPEN_CMD }} target/llvm-cov/html/index.html
+
+# xunit-viewer only accepts a single path (file or directory), not multiple files.
+# We copy all JUnit XMLs into one directory so the viewer sees every suite.
+test-view:
+	#!/bin/bash
+	set -euo pipefail
+
+	OUT=target/test-results.html
+	JUNIT_DIR=target/junit-for-viewer
+	rm -rf "$JUNIT_DIR" && mkdir -p "$JUNIT_DIR"
+	n=0
+
+	# Rust (nextest)
+	if [ -f target/nextest/default/junit.xml ]; then
+		cp target/nextest/default/junit.xml "$JUNIT_DIR/nextest.xml"
+		n=$((n + 1))
+	fi
+
+	# TypeScript (vitest per-workspace) — unique name per workspace (ts- or cf- prefix)
+	for f in typescript/*/test-results/junit.xml cf_workers/*/test-results/junit.xml; do
+		if [ -f "$f" ]; then
+			# e.g. typescript/common/... -> ts-common.xml, cf_workers/foo/... -> cf-foo.xml
+			base=$(echo "$f" | sed -E 's|^typescript/([^/]+)/.*|ts-\1|; s|^cf_workers/([^/]+)/.*|cf-\1|')
+			cp "$f" "$JUNIT_DIR/$base.xml"
+			n=$((n + 1))
+		fi
+	done
+
+	if [ "$n" -eq 0 ]; then
+		echo "No test results found. Run 'just test' first."
+		exit 1
+	fi
+
+	bun xunit-viewer --results "$JUNIT_DIR" --output "$OUT"
+	{{ OPEN_CMD }} "$OUT"
