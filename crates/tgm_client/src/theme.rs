@@ -178,12 +178,13 @@ pub fn draw_panel(x: f32, y: f32, w: f32, h: f32) {
 }
 
 /// Instrument-style panel: double chrome + corner bolts, lighter than the playfield well.
-/// `stress` in 0..1 nudges inner highlight (gravity / load).
+/// `stress` in 0..1 nudges inner highlight (gravity / load / beat).
 pub fn draw_hud_panel(x: f32, y: f32, w: f32, h: f32, stress: f32, divider_bottom: bool) {
 	let stress = stress.clamp(0.0, 1.0);
-	let outer_hi = lighten(PANEL_BORDER, 0.55 + stress * 0.08);
+	let s2 = stress * stress;
+	let outer_hi = lighten(PANEL_BORDER, 0.55 + stress * 0.12 + s2 * 0.05);
 	let outer_lo = darken(PANEL_BORDER, 0.12);
-	let inner_hi = lighten(PANEL_BORDER, 0.95 + stress * 0.1);
+	let inner_hi = lighten(PANEL_BORDER, 0.95 + stress * 0.14 + s2 * 0.06);
 	let inner_lo = darken(PANEL_BORDER, 0.02);
 
 	let pad = 3.0;
@@ -202,11 +203,11 @@ pub fn draw_hud_panel(x: f32, y: f32, w: f32, h: f32, stress: f32, divider_botto
 		y - pad + 1.5,
 		w + pad * 2.0 - 3.0,
 		h + pad * 2.0 - 3.0,
-		1.4,
+		1.4 + stress * 0.22,
 		outer_hi,
 	);
 	draw_rectangle_lines(x - 0.5, y - 0.5, w + 1.0, h + 1.0, 1.0, inner_lo);
-	let inset = 1.0 + stress * 0.4;
+	let inset = 1.0 + stress * 0.52;
 	draw_rectangle_lines(
 		x + inset,
 		y + inset,
@@ -300,8 +301,8 @@ pub fn cell_color(c: u8, mono: bool) -> Color {
 	match c {
 		1 => Color::from_rgba(0, 240, 240, 255), // I
 		2 => Color::from_rgba(200, 0, 240, 255), // T (classic magenta)
-		3 => Color::from_rgba(240, 160, 0, 255), // L
-		4 => Color::from_rgba(0, 0, 240, 255),   // J
+		3 => Color::from_rgba(0, 0, 240, 255),   // L
+		4 => Color::from_rgba(240, 160, 0, 255), // J
 		5 => Color::from_rgba(0, 240, 0, 255),   // S
 		6 => Color::from_rgba(240, 0, 0, 255),   // Z
 		7 => Color::from_rgba(240, 240, 0, 255), // O
@@ -315,7 +316,8 @@ pub fn dim_stack_cell(base: Color) -> Color {
 
 /// Darkening layer over the empty well (TGM1: no per-cell “background mino” grid).
 ///
-/// Semi-transparent so the procedural background shows through; opaque fills would hide it entirely.
+/// Semi-transparent so the procedural background shows through; opaque fills would hide it
+/// entirely.
 pub fn well_fill_color(mono: bool) -> Color {
 	if mono {
 		Color::from_rgba(20, 20, 22, 108)
@@ -332,7 +334,7 @@ impl ArcadeFont {
 		let mut f =
 			load_ttf_font_from_bytes(include_bytes!("../assets/fonts/PressStart2P-Regular.ttf"))?;
 		f.set_filter(FilterMode::Nearest);
-		for sz in [12_u16, 14, 16, 18, 20, 22, 24, 28, 32] {
+		for sz in [12_u16, 14, 16, 18, 20, 22, 24, 28, 32, 48, 52] {
 			f.populate_font_cache(&Font::ascii_character_list(), sz);
 		}
 		Ok(ArcadeFont(f))

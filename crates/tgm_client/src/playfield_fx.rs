@@ -3,8 +3,8 @@
 
 use macroquad::prelude::*;
 use tgm_core::{
-	BIG_BOARD_WIDTH, BIG_VISIBLE_ROWS, BOARD_WIDTH, EMPTY, Game, Input, Phase, PieceState,
-	VISIBLE_ROWS, find_full_lines, find_full_lines_big, input_unpack, piece_cells, piece_cells_big,
+	BOARD_WIDTH, EMPTY, Game, Input, Phase, PieceState, VISIBLE_ROWS, find_full_lines,
+	input_unpack, piece_cells,
 };
 
 /// Frames of death animation (shake + rust + border pulse).
@@ -111,7 +111,8 @@ pub struct PlayfieldFx {
 	/// 0 = not dead yet; 1..= [`DEATH_FRAMES_MAX`] after game over.
 	pub death_frames: u32,
 	pub wall_input: WallInputFeel,
-	/// Visual-only: piece is drawn offset along gravity so it appears to slam into place after sonic.
+	/// Visual-only: piece is drawn offset along gravity so it appears to slam into place after
+	/// sonic.
 	sonic_slam_cells: f32,
 	sonic_slam_reverse: bool,
 }
@@ -153,26 +154,18 @@ impl PlayfieldFx {
 			return 0.0;
 		}
 		let o = self.sonic_slam_cells * cell;
-		if self.sonic_slam_reverse {
-			o
-		} else {
-			-o
-		}
+		if self.sonic_slam_reverse { o } else { -o }
 	}
 
 	/// Call after each simulation `step` with the piece state **before** that step.
 	pub fn after_step(&mut self, game: &Game, piece_before: Option<PieceState>, input: Input) {
 		if let (Some(pb), Some(pa)) = (piece_before, game.piece) {
 			if input.sonic {
-				let rows = if game.options.reverse {
-					(pa.y - pb.y).max(0)
-				} else {
-					(pb.y - pa.y).max(0)
-				};
+				let rows = (pb.y - pa.y).max(0);
 				if rows > 0 {
 					let add = (rows as f32).min(SONIC_SLAM_MAX_ROWS);
 					self.sonic_slam_cells = self.sonic_slam_cells.max(add);
-					self.sonic_slam_reverse = game.options.reverse;
+					self.sonic_slam_reverse = false;
 				}
 			}
 		}
@@ -185,16 +178,9 @@ impl PlayfieldFx {
 			};
 			self.lock_flash_cells.clear();
 			let p = piece_before.expect("checked");
-			if game.options.big {
-				for (dx, dy) in piece_cells_big(p.kind, p.rot).cells {
-					self.lock_flash_cells
-						.push((p.x + dx as i32, p.y + dy as i32));
-				}
-			} else {
-				for (dx, dy) in piece_cells(p.kind, p.rot).cells {
-					self.lock_flash_cells
-						.push((p.x + dx as i32, p.y + dy as i32));
-				}
+			for (dx, dy) in piece_cells(p.kind, p.rot).cells {
+				self.lock_flash_cells
+					.push((p.x + dx as i32, p.y + dy as i32));
 			}
 		}
 	}
@@ -290,29 +276,6 @@ impl PlayfieldFx {
 			ox,
 			cell,
 			BOARD_WIDTH,
-			board_screen_y,
-		);
-	}
-
-	pub fn draw_line_clear_big(
-		&self,
-		game: &Game,
-		ox: f32,
-		cell: f32,
-		board_screen_y: impl Fn(i32) -> f32,
-	) {
-		if game.phase != Phase::LineClear {
-			return;
-		}
-		let full = find_full_lines_big(&game.board_big);
-		let dur = game.options.line_clear_frames().max(1);
-		let t = (dur - game.line_clear_timer) as f32 / dur as f32;
-		self.draw_line_clear_rows(
-			&full[..BIG_VISIBLE_ROWS],
-			t,
-			ox,
-			cell,
-			BIG_BOARD_WIDTH,
 			board_screen_y,
 		);
 	}

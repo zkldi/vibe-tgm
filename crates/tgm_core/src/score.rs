@@ -14,7 +14,7 @@ pub fn add_score(
 	}
 	let prev = *combo;
 	*combo = prev + 2 * lines - 2;
-	let ceil = ((level_before as u64 + lines as u64) + 3) / 4;
+	let ceil = (level_before as u64 + lines as u64).div_ceil(4);
 	let soft = soft_frames as u64 + 1;
 	let add = (ceil + soft) * lines as u64 * (*combo as u64) * bravo as u64;
 	score.saturating_add(add)

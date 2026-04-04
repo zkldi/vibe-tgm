@@ -21,10 +21,5 @@ pub const BOARD_HEIGHT: usize = 21;
 /// Visible rows (excluding buffer).
 pub const VISIBLE_ROWS: usize = 20;
 
-/// Big mode: 5-wide logical field, 10 visible + 1 buffer row.
-pub const BIG_BOARD_WIDTH: usize = 5;
-pub const BIG_BOARD_HEIGHT: usize = 11;
-pub const BIG_VISIBLE_ROWS: usize = 10;
-
 /// TLS ghost piece shown for levels 0..=100 inclusive.
 pub const TLS_MAX_LEVEL: u16 = 100;

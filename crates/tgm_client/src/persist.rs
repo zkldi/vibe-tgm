@@ -80,7 +80,8 @@ pub struct ReplayFile {
 	pub seed: u64,
 	pub options: GameOptions,
 	pub inputs: Vec<u8>,
-	/// Wall time when the file was written (`now_ms()`). Omitted in older files (deserializes as 0).
+	/// Wall time when the file was written (`now_ms()`). Omitted in older files (deserializes as
+	/// 0).
 	#[serde(default)]
 	pub saved_at_ms: u64,
 	/// End-of-run stats. `None` in older files.
@@ -227,7 +228,8 @@ pub fn list_replay_files() -> io::Result<Vec<PathBuf>> {
 #[derive(Clone, Debug)]
 pub struct ReplayListEntry {
 	pub path: PathBuf,
-	/// Milliseconds since Unix epoch for display (from JSON `saved_at_ms`, else filename, else mtime).
+	/// Milliseconds since Unix epoch for display (from JSON `saved_at_ms`, else filename, else
+	/// mtime).
 	pub display_ms: u64,
 	pub summary: Option<ReplaySummary>,
 }
@@ -259,8 +261,7 @@ pub fn load_replay_list_entries() -> Vec<ReplayListEntry> {
 }
 
 fn replay_ms_from_filename(path: &Path) -> Option<u64> {
-	path
-		.file_stem()
+	path.file_stem()
 		.and_then(|s| s.to_str())
 		.and_then(|s| s.strip_prefix("replay_"))
 		.and_then(|s| s.parse().ok())

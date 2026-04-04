@@ -174,27 +174,13 @@ pub fn rotate_ccw(kind: PieceKind, rot: RotIndex) -> RotIndex {
 pub fn spawn_origin(kind: PieceKind, rot: RotIndex) -> (i32, i32) {
 	match kind {
 		PieceKind::I => {
-			if rot % 4 == 0 {
+			if rot.is_multiple_of(4) {
 				(3, 18)
 			} else {
 				(3, 17)
 			}
 		}
 		_ => (3, 18),
-	}
-}
-
-/// Spawn at bottom of well (reverse / Rev mode).
-pub fn spawn_origin_rev(kind: PieceKind, rot: RotIndex) -> (i32, i32) {
-	match kind {
-		PieceKind::I => {
-			if rot % 4 == 0 {
-				(3, 1)
-			} else {
-				(3, 0)
-			}
-		}
-		_ => (3, 0),
 	}
 }
 

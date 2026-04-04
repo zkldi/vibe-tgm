@@ -1,7 +1,5 @@
 //! Internal gravity in units of (1/256) cells per frame. G = internal / 256.
 
-use crate::options::GameOptions;
-
 /// Returns internal gravity for the given level (piecewise constant from wiki table).
 pub fn internal_gravity(level: u16) -> u16 {
 	match level {
@@ -38,29 +36,14 @@ pub fn internal_gravity(level: u16) -> u16 {
 	}
 }
 
-/// Gravity with title-screen 20G cheat (constant 20G at all levels).
-pub fn effective_gravity(level: u16, opts: &GameOptions) -> u16 {
-	if opts.force_20g {
-		5120
-	} else {
-		internal_gravity(level)
-	}
+/// Alias for [`internal_gravity`]: gravity used during play (no alternate modes).
+pub fn effective_gravity(level: u16) -> u16 {
+	internal_gravity(level)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::options::GameOptions;
-
-	#[test]
-	fn effective_gravity_force_20g() {
-		let o = GameOptions {
-			force_20g: true,
-			..Default::default()
-		};
-		assert_eq!(effective_gravity(0, &o), 5120);
-		assert_eq!(effective_gravity(100, &o), 5120);
-	}
 
 	#[test]
 	fn sample_levels() {
