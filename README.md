@@ -13,7 +13,7 @@
 
 This is a sped up showcase video of autoplay, not me.
 
-<video src="https://raw.githubusercontent.com/zkldi/vibe-tgm/main/.img/showcase.mp4" controls width="100%"></video>
+[![autoplay video](.img/gameplay.png)](https://github.com/zkldi/vibe-tgm/raw/main/.img/showcase.mp4)
 
 # Total Cost
 
