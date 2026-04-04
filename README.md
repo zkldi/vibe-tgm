@@ -13,7 +13,7 @@
 
 This is a sped up showcase video of autoplay, not me.
 
-<video src=".img/showcase.mp4" controls autoplay loop style="width:100%;max-width:540px;display:block;margin:24px 0;border-radius:12px;box-shadow:0 2px 8px #0003;"></video>
+[![Video](hi)](https://raw.githubusercontent.com/zkldi/vibe-tgm/main/.img/showcase.mp4)
 
 # Total Cost
 
