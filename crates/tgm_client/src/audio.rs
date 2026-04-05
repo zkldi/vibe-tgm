@@ -1,10 +1,13 @@
 //! Embedded gameplay audio: dual BGM (level 0–479 early, **silent 480–499**, 500+ late) and SFX.
 //!
+//! BGM is shipped as **Ogg Opus** (`.opus`) and decoded to WAV at startup to keep the binary small.
+//! Re-encode with e.g. `ffmpeg -i bgm1.wav -c:a libopus -b:a 128k bgm1.opus`.
+//!
 //! Replace files under [`crates/tgm_client/assets/audio/`](../assets/audio/) with your own
 //! licensed/original assets. Expected filenames (wired in [`AudioAssets::load`]):
-//! - `bgm1_intro.wav` — one-shot intro for early BGM (bar 10 @ 140 BPM from the full track)
-//! - `bgm1.wav` — early BGM loop (plays after intro; seamless with intro)
-//! - `bgm2.wav` — late-section BGM loop (level 500+ @ **150 BPM** for HUD beat sync)
+//! - `bgm1_intro.opus` — one-shot intro for early BGM (bar 10 @ 140 BPM from the full track)
+//! - `bgm1.opus` — early BGM loop (plays after intro; seamless with intro)
+//! - `bgm2.opus` — late-section BGM loop (level 500+ @ **150 BPM** for HUD beat sync)
 //! - `lock.wav` — short click on every piece lock (also when lines clear; line SFX layer on top)
 //! - `sonic.wav`
 //! - `next_i.wav` … `next_o.wav` — one cue per tetromino for the **NEXT** preview
@@ -18,6 +21,7 @@
 
 use std::io::Cursor;
 
+use crate::ogg_opus;
 use hound::{SampleFormat, WavReader, WavWriter};
 use macroquad::audio::{
 	PlaySoundParams, Sound, load_sound_from_bytes, play_sound, set_sound_volume, stop_sound,
@@ -86,6 +90,13 @@ pub struct AudioAssets {
 	go_voice: Sound,
 }
 
+async fn load_embedded_opus_bgm(bytes: &[u8]) -> Result<Sound, macroquad::Error> {
+	let wav = ogg_opus::decode_ogg_opus_to_wav_bytes(bytes).map_err(|_| {
+		macroquad::Error::UnknownError("ogg opus decode failed")
+	})?;
+	load_sound_from_bytes(&wav).await
+}
+
 impl AudioAssets {
 	/// Load all embedded samples. Call after [`macroquad::prelude::next_frame`].
 	pub async fn load() -> Result<Self, macroquad::Error> {
@@ -95,9 +106,12 @@ impl AudioAssets {
 			};
 		}
 		Ok(Self {
-			bgm_early_intro: emb!("../assets/audio/bgm1_intro.wav"),
-			bgm_early: emb!("../assets/audio/bgm1.wav"),
-			bgm_late: emb!("../assets/audio/bgm2.wav"),
+			bgm_early_intro: load_embedded_opus_bgm(include_bytes!(
+				"../assets/audio/bgm1_intro.opus"
+			))
+			.await?,
+			bgm_early: load_embedded_opus_bgm(include_bytes!("../assets/audio/bgm1.opus")).await?,
+			bgm_late: load_embedded_opus_bgm(include_bytes!("../assets/audio/bgm2.opus")).await?,
 			lock: emb!("../assets/audio/lock.wav"),
 			sonic: emb!("../assets/audio/sonic.wav"),
 			next_i: emb!("../assets/audio/next_i.wav"),

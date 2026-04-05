@@ -1,8 +1,10 @@
-# Release builds and archives under dist/ for GitHub releases.
+# Release builds under dist/ for GitHub releases.
 #
-# Typical flow: run each recipe on the matching OS (or CI job), then upload
-# dist/* to a GitHub Release. Cross-compiling macroquad from one host to
-# another is fragile; native builds are the reliable path.
+# macOS: a real .app bundle (universal aarch64 + x86_64) zipped — unzip, open the app.
+# Windows / Linux: a .zip containing the game binary (run the .exe or ./tgm_client).
+#
+# Cross-compiling macroquad from one host to another is fragile; native builds per OS
+# (or CI matrix) are the reliable path.
 
 CRATE := "tgm_client"
 DIST := "dist"
@@ -11,11 +13,15 @@ DIST := "dist"
 release:
 	cargo build --release -p {{CRATE}}
 
-# Install rustup targets for universal macOS release builds (Apple Silicon + Intel).
+# Optional: only if you need a fat binary (see release-macos-universal).
 release-install-targets-macos:
 	rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-# macOS: build aarch64 + x86_64 and write dist/{{CRATE}}-<version>-<triple>.tar.gz
+# macOS: native-arch {{CRATE}}.app, then dist/{{CRATE}}-<version>-macos.zip
+#
+# Builds only for the host CPU (aarch64 on Apple Silicon, x86_64 on Intel). A universal
+# binary would require two separate native builds (libopus does not cross-compile cleanly
+# from arm64 to x86_64 on one machine). Use `release-macos-universal` if you have both.
 release-macos:
 	#!/bin/bash
 	set -euo pipefail
@@ -24,17 +30,24 @@ release-macos:
 		exit 1
 	fi
 	cd "{{ justfile_directory() }}"
+	export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:-}:/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
+	CRATE="{{ CRATE }}"
 	VERSION=$(grep -m1 '^version' crates/tgm_client/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
 	mkdir -p "{{ DIST }}"
-	for triple in aarch64-apple-darwin x86_64-apple-darwin; do
-		cargo build --release -p "{{ CRATE }}" --target "$triple"
-		ARCHIVE="{{ DIST }}/{{ CRATE }}-${VERSION}-${triple}.tar.gz"
-		rm -f "$ARCHIVE"
-		tar -czf "$ARCHIVE" -C "target/${triple}/release" "{{ CRATE }}"
-		echo "Wrote $ARCHIVE"
-	done
+	cargo build --release -p "$CRATE"
+	APP="{{ DIST }}/${CRATE}.app"
+	rm -rf "$APP"
+	mkdir -p "$APP/Contents/MacOS"
+	cp "target/release/${CRATE}" "$APP/Contents/MacOS/${CRATE}"
+	chmod +x "$APP/Contents/MacOS/${CRATE}"
+	sed -e "s/__CRATE__/${CRATE}/g" -e "s/__VERSION__/${VERSION}/g" \
+		packaging/macos/Info.plist.template > "$APP/Contents/Info.plist"
+	ARCHIVE="{{ DIST }}/${CRATE}-${VERSION}-macos.zip"
+	rm -f "$ARCHIVE"
+	(cd "{{ DIST }}" && zip -qr "$(basename "$ARCHIVE")" "${CRATE}.app")
+	echo "Wrote $ARCHIVE"
 
-# Linux: native release and dist/{{CRATE}}-<version>-<host-triple>.tar.gz
+# Linux: native release and dist/{{CRATE}}-<version>-<triple>.zip (single binary)
 release-linux:
 	#!/bin/bash
 	set -euo pipefail
@@ -42,17 +55,20 @@ release-linux:
 		echo "release-linux: must run on Linux (cross-compile this crate is not set up here)" >&2
 		exit 1
 	fi
-	cd "{{ justfile_directory() }}"
+	ROOT="{{ justfile_directory() }}"
+	cd "$ROOT"
+	CRATE="{{ CRATE }}"
 	VERSION=$(grep -m1 '^version' crates/tgm_client/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
 	TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
-	mkdir -p "{{ DIST }}"
-	cargo build --release -p "{{ CRATE }}"
-	ARCHIVE="{{ DIST }}/{{ CRATE }}-${VERSION}-${TRIPLE}.tar.gz"
+	mkdir -p "$ROOT/{{ DIST }}"
+	cargo build --release -p "$CRATE"
+	ARCHIVE="$ROOT/{{ DIST }}/${CRATE}-${VERSION}-${TRIPLE}.zip"
 	rm -f "$ARCHIVE"
-	tar -czf "$ARCHIVE" -C target/release "{{ CRATE }}"
+	chmod +x "$ROOT/target/release/${CRATE}"
+	(cd "$ROOT/target/release" && zip -q "$ARCHIVE" "$CRATE")
 	echo "Wrote $ARCHIVE"
 
-# Windows: native release and dist/{{CRATE}}-<version>-<host-triple>.zip
+# Windows: native release and dist/{{CRATE}}-<version>-<host-triple>.zip (single .exe)
 release-windows:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -66,15 +82,16 @@ release-windows:
 			exit 1
 			;;
 	esac
+	CRATE="{{ CRATE }}"
 	VERSION=$(grep -m1 '^version' crates/tgm_client/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
 	mkdir -p "$ROOT/{{ DIST }}"
-	cargo build --release -p "{{ CRATE }}"
-	ARCHIVE="$ROOT/{{ DIST }}/{{ CRATE }}-${VERSION}-${HOST}.zip"
+	cargo build --release -p "$CRATE"
+	ARCHIVE="$ROOT/{{ DIST }}/${CRATE}-${VERSION}-${HOST}.zip"
 	rm -f "$ARCHIVE"
 	if command -v zip >/dev/null 2>&1; then
-		(cd "$ROOT/target/release" && zip -q "$ARCHIVE" "{{ CRATE }}.exe")
+		(cd "$ROOT/target/release" && zip -q "$ARCHIVE" "${CRATE}.exe")
 	else
-		EXE="$ROOT/target/release/{{ CRATE }}.exe"
+		EXE="$ROOT/target/release/${CRATE}.exe"
 		powershell.exe -NoProfile -Command "Compress-Archive -LiteralPath \"$EXE\" -DestinationPath \"$ARCHIVE\" -Force"
 	fi
 	echo "Wrote $ARCHIVE"

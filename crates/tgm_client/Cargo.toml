@@ -4,6 +4,9 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
+# audiopus links libopus (via audiopus-sys). `audiopus_sys` `static` forces static libopus
+# on every platform (pkg-config + bundled build). Still need dev libs to link against:
+# macOS `brew install opus`, Debian/Ubuntu `libopus-dev`, Windows MSVC often vcpkg `opus`.
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 tgm_core = { path = "../tgm_core" }
@@ -12,3 +15,6 @@ rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 hound = "3.5"
+audiopus = { version = "0.2.0", default-features = false, features = ["decoder"] }
+audiopus_sys = { version = "0.1.8", features = ["static"] }
+ogg = { version = "0.9.2", default-features = false }

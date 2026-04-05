@@ -2,6 +2,7 @@
 
 mod attract;
 mod audio;
+mod ogg_opus;
 mod backgrounds;
 mod hud;
 mod persist;
