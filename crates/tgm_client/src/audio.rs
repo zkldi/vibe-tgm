@@ -19,7 +19,9 @@
 use std::io::Cursor;
 
 use hound::{SampleFormat, WavReader, WavWriter};
-use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound, stop_sound};
+use macroquad::audio::{
+	PlaySoundParams, Sound, load_sound_from_bytes, play_sound, set_sound_volume, stop_sound,
+};
 use tgm_core::{
 	Game, Input, Phase, PieceKind, PieceState, count_full_lines, find_full_lines,
 	line_clear_only_for_increment,
@@ -207,6 +209,18 @@ fn vol_unless_muted(vol: f32, muted: bool) -> f32 {
 	}
 }
 
+/// BGM uses three [`Sound`] handles; [`set_sound_volume`] applies to currently playing instances.
+fn set_bgm_track_volumes(a: &AudioAssets, muted: bool) {
+	set_bgm_track_volumes_scaled(a, muted, 1.0);
+}
+
+fn set_bgm_track_volumes_scaled(a: &AudioAssets, muted: bool, scale: f32) {
+	let v = vol_unless_muted(BGM_VOL * scale.clamp(0.0, 1.0), muted);
+	set_sound_volume(&a.bgm_early_intro, v);
+	set_sound_volume(&a.bgm_early, v);
+	set_sound_volume(&a.bgm_late, v);
+}
+
 pub fn play_ready_voice(a: &AudioAssets, muted: bool) {
 	play_sound_once_with_vol(&a.ready_voice, vol_unless_muted(READY_GO_VOL, muted));
 }
@@ -235,7 +249,7 @@ pub struct AudioRuntime {
 	early_phase: EarlyBgmPhase,
 	early_intro_started: std::time::Instant,
 	late_bgm_started: std::time::Instant,
-	/// When set, BGM is stopped and one-shot SFX use zero volume (F2 toggles in the client).
+	/// When set, BGM and one-shot SFX use zero volume (F2 toggles in the client).
 	pub muted: bool,
 }
 
@@ -268,7 +282,7 @@ impl AudioRuntime {
 			&a.bgm_early,
 			PlaySoundParams {
 				looped: true,
-				volume: BGM_VOL,
+				volume: vol_unless_muted(BGM_VOL, self.muted),
 			},
 		);
 		self.early_phase = EarlyBgmPhase::Loop;
@@ -282,12 +296,16 @@ impl AudioRuntime {
 		self.early_phase = EarlyBgmPhase::Idle;
 	}
 
+	/// Apply [`Self::muted`] and `volume_scale` (0..=1) to the three BGM [`Sound`] handles.
+	/// `volume_scale` is typically `1.0`, or ramps down during death (see [`crate::playfield_fx`]).
+	/// Call after toggling mute, when [`Self::sync_bgm_for_level`] is skipped for a frame, or
+	/// after `sync_bgm_for_level` each frame.
+	pub fn apply_bgm_volume_scale(&self, a: &AudioAssets, volume_scale: f32) {
+		set_bgm_track_volumes_scaled(a, self.muted, volume_scale);
+	}
+
 	/// Keep BGM in sync with `level` (early below 480, **none** 480–499, late 500+).
 	pub fn sync_bgm_for_level(&mut self, level: u16, a: &AudioAssets) {
-		if self.muted {
-			self.stop_bgm(a);
-			return;
-		}
 		let want = if level >= LATE_BGM_LEVEL {
 			ActiveBgm::Late
 		} else if level >= BGM_CUTOUT_LEVEL {
@@ -299,6 +317,7 @@ impl AudioRuntime {
 			if want == ActiveBgm::Early {
 				self.tick_early_intro(a);
 			}
+			set_bgm_track_volumes(a, self.muted);
 			return;
 		}
 		stop_sound(&a.bgm_early_intro);
@@ -314,7 +333,7 @@ impl AudioRuntime {
 					&a.bgm_early_intro,
 					PlaySoundParams {
 						looped: false,
-						volume: BGM_VOL,
+						volume: vol_unless_muted(BGM_VOL, self.muted),
 					},
 				);
 			}
@@ -324,12 +343,13 @@ impl AudioRuntime {
 					&a.bgm_late,
 					PlaySoundParams {
 						looped: true,
-						volume: BGM_VOL,
+						volume: vol_unless_muted(BGM_VOL, self.muted),
 					},
 				);
 			}
 			ActiveBgm::None => {}
 		}
+		set_bgm_track_volumes(a, self.muted);
 	}
 
 	/// Seconds since early BGM (`bgm1` intro + loop) started, if that track is active.

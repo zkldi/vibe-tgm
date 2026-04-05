@@ -358,6 +358,16 @@ fn replay_seek_to(
 	*section_split_fx = None;
 	screen_juice.reset();
 	audio_runtime.sync_bgm_for_level(rw.game.level, audio_assets);
+	let death_scale = bgm_volume_scale_for_death(rw.game.game_over, playfield_fx.death_frames);
+	audio_runtime.apply_bgm_volume_scale(audio_assets, death_scale);
+}
+
+/// BGM multiplier while the death sequence runs (aligned with [`PlayfieldFx::death_frames`]).
+fn bgm_volume_scale_for_death(game_over: bool, death_frames: u32) -> f32 {
+	if !game_over {
+		return 1.0;
+	}
+	1.0 - (death_frames.saturating_add(1).min(DEATH_FRAMES_MAX) as f32 / DEATH_FRAMES_MAX as f32)
 }
 
 fn feed_score_pulse(score_before: u64, score_after: u64, anim: &mut Option<ScorePulseAnim>) {
@@ -539,6 +549,16 @@ async fn main() {
 
 		if is_key_pressed(KeyCode::F2) {
 			audio_runtime.muted = !audio_runtime.muted;
+			let death_scale = match (&client_state, &game, &replay_watch) {
+				(ClientState::Playing | ClientState::PostGame, Some(g), _) => {
+					bgm_volume_scale_for_death(g.game_over, playfield_fx.death_frames)
+				}
+				(ClientState::ReplayPlayback, _, Some(rw)) => {
+					bgm_volume_scale_for_death(rw.game.game_over, playfield_fx.death_frames)
+				}
+				_ => 1.0,
+			};
+			audio_runtime.apply_bgm_volume_scale(&audio_assets, death_scale);
 		}
 
 		if is_key_pressed(KeyCode::F3) {
@@ -1277,7 +1297,7 @@ async fn main() {
 		}
 
 		match &client_state {
-			ClientState::Playing | ClientState::PostGame | ClientState::Attract => {
+			ClientState::Playing | ClientState::PostGame => {
 				if let Some(ref g) = game {
 					let skip_bgm = matches!(client_state, ClientState::Playing)
 						&& matches!(
@@ -1287,11 +1307,21 @@ async fn main() {
 					if !skip_bgm {
 						audio_runtime.sync_bgm_for_level(g.level, &audio_assets);
 					}
+					let death_scale = bgm_volume_scale_for_death(g.game_over, playfield_fx.death_frames);
+					audio_runtime.apply_bgm_volume_scale(&audio_assets, death_scale);
+				}
+			}
+			ClientState::Attract => {
+				if game.is_some() {
+					audio_runtime.stop_bgm(&audio_assets);
 				}
 			}
 			ClientState::ReplayPlayback => {
 				if let Some(ref rw) = replay_watch {
 					audio_runtime.sync_bgm_for_level(rw.game.level, &audio_assets);
+					let death_scale =
+						bgm_volume_scale_for_death(rw.game.game_over, playfield_fx.death_frames);
+					audio_runtime.apply_bgm_volume_scale(&audio_assets, death_scale);
 				}
 			}
 			_ => {}
