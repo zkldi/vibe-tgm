@@ -13,7 +13,8 @@
 
 This is a sped up showcase video of autoplay, not me.
 
-https://raw.githubusercontent.com/zkldi/vibe-tgm/main/.img/showcase.mp4
+https://github.com/user-attachments/assets/4d934a74-d481-4e6e-a88d-946c04dee0ee
+
 
 # Total Cost
 
