@@ -30,7 +30,7 @@ L and J pieces have the wrong colours
 # And top-of-head thoughts
 
 I can't believe any of this is possible. The whole time I would give it tasks I
-thought it would fail on, and it only really definitively failed on three things
+thought it would fail on, and it only really definitively failed on two things
 (positioning hud elements and an autoplay engine).
 
 **Here is the tersest summary I can give.** If you are in a **VERIFIABLE**
