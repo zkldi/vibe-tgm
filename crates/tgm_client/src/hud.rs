@@ -152,7 +152,7 @@ pub fn draw_mute_indicator(font: &ArcadeFont, design_width: f32, muted: bool) {
 	let m = font.measure(LABEL, sz);
 	let pad = 10.0;
 	let x = design_width - m.width - pad;
-	let y = pad;
+	let y = 32.0;
 	font.draw(
 		LABEL,
 		x,
@@ -165,9 +165,11 @@ pub fn draw_mute_indicator(font: &ArcadeFont, design_width: f32, muted: bool) {
 pub const HUD_W: f32 = 224.0;
 
 /// Height of the NEXT panel (label + mini preview) only.
-pub const NEXT_ZONE_H: f32 = 64.0;
+pub const NEXT_ZONE_H: f32 = 74.0;
 /// Empty gap between the bottom of the NEXT panel and the playfield top.
 pub const NEXT_PLAYFIELD_GAP: f32 = 8.0;
+/// Extra inset: strip starts above the window top margin so the NEXT panel sits higher.
+pub const NEXT_BAND_TOP_OFFSET: f32 = -10.0;
 /// Space reserved below the playfield frame for the TGM-style timer (includes sector-split pop).
 pub const TIMER_ZONE_H: f32 = 56.0;
 
@@ -328,14 +330,94 @@ fn draw_score_row(
 	}
 }
 
-fn draw_modes_line(font: &ArcadeFont, x: f32, y: f32, opts: &GameOptions) {
-	let label = if opts.autoplay { "AUTOPLAY" } else { "NORMAL" };
-	font.draw(label, x, y, 10.0, TEXT_HELP);
+/// Per-key highlight state for the left-rail control hint panel ([`draw_control_hints`]).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ControlHintsState {
+	pub w: bool,
+	pub a: bool,
+	pub s: bool,
+	pub d: bool,
+	pub j: bool,
+	pub k: bool,
+	pub l: bool,
 }
 
-fn draw_mini_piece(x: f32, y: f32, kind: PieceKind, mono: bool) {
+fn control_hint_color(active: bool) -> Color {
+	if active {
+		WHITE
+	} else {
+		TEXT_HELP
+	}
+}
+
+/// WASD / JKL hints below the grade panel; each glyph lights while its key is held.
+fn draw_control_hints(
+	font: &ArcadeFont,
+	hx: f32,
+	inner: f32,
+	baseline_below_grade: f32,
+	stress: f32,
+	hints: &ControlHintsState,
+) {
+	let stress = (stress * 0.82).min(1.0);
+	let panel_top = baseline_below_grade + 10.0;
+	let panel_h = 86.0;
+	draw_hud_panel(hx, panel_top, HUD_W, panel_h, stress, true);
+	let pad = 10.0;
+	let content_w = HUD_W - 2.0 * pad;
+	let key_sz = 12.0;
+	let label_sz = 9.0;
+
+	let mut row_y = panel_top + 18.0;
+	font.draw("MOVE", inner, row_y, label_sz, HUD_LABEL);
+	row_y += 13.0;
+
+	let w_m = font.measure("W", key_sz);
+	let cx = inner + content_w * 0.5;
+	font.draw(
+		"W",
+		cx - w_m.width * 0.5,
+		row_y,
+		key_sz,
+		control_hint_color(hints.w),
+	);
+	row_y += 14.0;
+
+	let trip = [("A", hints.a), ("S", hints.s), ("D", hints.d)];
+	let gap = 6.0f32;
+	let mut trip_w = 0.0f32;
+	for (s, _) in trip {
+		trip_w += font.measure(s, key_sz).width;
+	}
+	trip_w += gap * (trip.len().saturating_sub(1) as f32);
+	let mut tx = inner + (content_w - trip_w) * 0.5;
+	for (s, on) in trip {
+		font.draw(s, tx, row_y, key_sz, control_hint_color(on));
+		tx += font.measure(s, key_sz).width + gap;
+	}
+
+	row_y += 18.0;
+	font.draw("ROT", inner, row_y, label_sz, HUD_LABEL);
+	row_y += 13.0;
+
+	let rot = [("J", hints.j), ("K", hints.k), ("L", hints.l)];
+	let mut rot_w = 0.0f32;
+	for (s, _) in rot {
+		rot_w += font.measure(s, key_sz).width;
+	}
+	rot_w += gap * (rot.len().saturating_sub(1) as f32);
+	let mut rx = inner + (content_w - rot_w) * 0.5;
+	for (s, on) in rot {
+		font.draw(s, rx, row_y, key_sz, control_hint_color(on));
+		rx += font.measure(s, key_sz).width + gap;
+	}
+}
+
+/// Mini preview cell size (main playfield [`CELL`] is larger).
+const MINI_PIECE_CELL: f32 = 14.0;
+
+fn draw_mini_piece(x: f32, y: f32, kind: PieceKind, s: f32, mono: bool) {
 	let def = piece_cells(kind, 0);
-	let s = 11.0;
 	let col = cell_color(kind as u8 + 1, mono);
 	for (dx, dy) in def.cells {
 		let px = x + dx as f32 * s;
@@ -344,9 +426,22 @@ fn draw_mini_piece(x: f32, y: f32, kind: PieceKind, mono: bool) {
 	}
 }
 
-/// Max Y extent of [`draw_mini_piece`] (anchor `y` = top row).
-fn next_preview_span_y() -> f32 {
-	3.0 * 11.0
+/// Axis-aligned bounds of [`draw_mini_piece`] at anchor `(0, 0)` (same convention as drawing).
+fn mini_piece_bounds_at_origin(kind: PieceKind, s: f32) -> (f32, f32, f32, f32) {
+	let def = piece_cells(kind, 0);
+	let mut min_l = f32::MAX;
+	let mut min_t = f32::MAX;
+	let mut max_r = f32::MIN;
+	let mut max_b = f32::MIN;
+	for (dx, dy) in def.cells {
+		let x0 = dx as f32 * s;
+		let y0 = (3.0 - dy as f32) * s;
+		min_l = min_l.min(x0);
+		min_t = min_t.min(y0);
+		max_r = max_r.max(x0 + s);
+		max_b = max_b.max(y0 + s);
+	}
+	(min_l, min_t, max_r, max_b)
 }
 
 fn draw_gravity_pressure_bar(
@@ -414,15 +509,19 @@ pub fn draw_next_strip(
 	let label_bottom = label_baseline - lm.offset_y + lm.height;
 	let gap_below_label = -2.0;
 	let gap_above_field = 3.0;
-	let span_y = next_preview_span_y();
-	let py_min = label_bottom + gap_below_label;
-	let py_max =
-		(panel_bottom_y - gap_above_field - span_y).min(field_top_y - gap_above_field - span_y);
-	let py = py_min.min(py_max);
+	let s = MINI_PIECE_CELL;
+	let (bl, bt, br, bb) = mini_piece_bounds_at_origin(game.next_kind, s);
+	let slot_top = label_bottom + gap_below_label;
+	let slot_bottom = (panel_bottom_y - gap_above_field).min(field_top_y - gap_above_field);
+	let cx = ox + field_w * 0.5;
+	let cy = (slot_top + slot_bottom) * 0.5;
+	let mut ay = cy - (bt + bb) * 0.5;
+	let ay_min = slot_top - bt;
+	let ay_max = slot_bottom - bb;
+	ay = ay.clamp(ay_min, ay_max);
+	let px = cx - (bl + br) * 0.5;
 	font.draw(label, inner, label_baseline, label_sz, HUD_LABEL);
-	let preview_w = 44.0;
-	let px = ox + (field_w - preview_w) * 0.5;
-	draw_mini_piece(px, py, game.next_kind, false);
+	draw_mini_piece(px, ay, game.next_kind, s, false);
 }
 
 /// Large timer below the playfield chrome, centered on the field width.
@@ -563,6 +662,7 @@ pub fn draw_hud(
 	y_jolt: f32,
 	grade_up_t01: Option<f32>,
 	score_pulse: Option<&ScorePulseAnim>,
+	control_hints: Option<&ControlHintsState>,
 ) {
 	draw_hud_at(
 		font,
@@ -575,6 +675,7 @@ pub fn draw_hud(
 		y_jolt,
 		grade_up_t01,
 		score_pulse,
+		control_hints,
 	);
 }
 
@@ -589,6 +690,7 @@ fn draw_hud_at(
 	y_jolt: f32,
 	grade_up_t01: Option<f32>,
 	score_pulse: Option<&ScorePulseAnim>,
+	control_hints: Option<&ControlHintsState>,
 ) {
 	let stress = (hud_stress(game, opts, rot_feel, hud_time) + beat_stress).min(1.0);
 	let level_gate = line_clear_only_for_increment(game.level);
@@ -707,5 +809,7 @@ fn draw_hud_at(
 	font.draw(gl, gx, b2, val_sz, grade_draw_color);
 	y += grade_h + 8.0;
 
-	draw_modes_line(font, inner, y, opts);
+	if let Some(h) = control_hints {
+		draw_control_hints(font, hx, inner, y, stress, h);
+	}
 }

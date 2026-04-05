@@ -1,2 +1,2 @@
 game:
-	cargo run -p tgm_client
+	cargo run -p tgm_client --release

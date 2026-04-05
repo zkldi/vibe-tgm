@@ -152,6 +152,15 @@ impl Game {
 		Grade::from_score(self.score)
 	}
 
+	/// Grade for HUD progression and SFX — matches [`Self::grade_label`], including [`Grade::Gm`]
+	/// when the run is cleared with a GM-qualifying time/score.
+	pub fn grade_for_hud(&self) -> Grade {
+		if self.cleared && self.gm_qualified {
+			return Grade::Gm;
+		}
+		self.grade()
+	}
+
 	pub fn grade_label(&self) -> &'static str {
 		if self.cleared && self.gm_qualified {
 			return "GM";

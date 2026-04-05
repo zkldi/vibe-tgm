@@ -42,8 +42,8 @@ use theme::{
 
 use crate::attract::{attract_key_requests_exit, draw_attract_overlay};
 use crate::hud::{
-	GradeUpAnim, HudRotFeel, ScorePulseAnim, SectionSplitFx, beat_stress_bgm1, beat_stress_bgm2,
-	format_time_tgm,
+	ControlHintsState, GradeUpAnim, HudRotFeel, ScorePulseAnim, SectionSplitFx, beat_stress_bgm1,
+	beat_stress_bgm2, format_time_tgm,
 };
 
 const CELL: f32 = 22.0;
@@ -62,7 +62,8 @@ const RIGHT_RAIL_X: f32 = FIELD_OX_BASE + FIELD_COL_W + HUD_GAP;
 const DESIGN_WIDTH: f32 =
 	MARGIN + hud::HUD_W + HUD_GAP + FIELD_COL_W + HUD_GAP + hud::HUD_W + MARGIN;
 /// Top edge of the playfield interior / frame (below NEXT strip + gap).
-const FIELD_TOP: f32 = MARGIN + hud::NEXT_ZONE_H + hud::NEXT_PLAYFIELD_GAP;
+const FIELD_TOP: f32 =
+	MARGIN + hud::NEXT_BAND_TOP_OFFSET + hud::NEXT_ZONE_H + hud::NEXT_PLAYFIELD_GAP;
 const DESIGN_HEIGHT: f32 = FIELD_TOP + VISIBLE_ROWS as f32 * CELL + hud::TIMER_ZONE_H + MARGIN;
 
 /// Vertical placement for the right-rail panel (roughly centered on the stack area).
@@ -353,7 +354,7 @@ fn replay_seek_to(
 	rw.game = replay_simulate_to(seed, opts, &rw.inputs, new_idx, playfield_fx);
 	rw.idx = new_idx;
 	rw.step_accum = 0.0;
-	*grade_last = rw.game.grade();
+	*grade_last = rw.game.grade_for_hud();
 	*grade_up_fx = None;
 	*score_pulse_fx = None;
 	*section_split_fx = None;
@@ -659,7 +660,7 @@ async fn main() {
 								audio_runtime.muted,
 							);
 							step_accum -= STEP_SEC;
-							let gr = g.grade();
+							let gr = g.grade_for_hud();
 							if gr > grade_last {
 								play_grade_up(&audio_assets, audio_runtime.muted);
 								grade_up_fx = Some(GradeUpAnim::new());
@@ -858,7 +859,7 @@ async fn main() {
 									audio_runtime.muted,
 								);
 								step_accum -= STEP_SEC;
-								let gr = g.grade();
+								let gr = g.grade_for_hud();
 								if gr > grade_last {
 									play_grade_up(&audio_assets, audio_runtime.muted);
 									grade_up_fx = Some(GradeUpAnim::new());
@@ -949,7 +950,7 @@ async fn main() {
 						let path = replay_list_entries[replay_list_scroll].path.clone();
 						if let Ok(r) = load_replay(&path) {
 							let g = Game::with_options(r.seed, r.options);
-							grade_last = g.grade();
+							grade_last = g.grade_for_hud();
 							grade_up_fx = None;
 							score_pulse_fx = None;
 							section_split_fx = None;
@@ -1078,7 +1079,7 @@ async fn main() {
 									);
 									*idx += 1;
 									*r_accum -= STEP_SEC;
-									let gr = g.grade();
+									let gr = g.grade_for_hud();
 									if gr > grade_last {
 										play_grade_up(&audio_assets, audio_runtime.muted);
 										grade_up_fx = Some(GradeUpAnim::new());
@@ -1118,7 +1119,7 @@ async fn main() {
 									audio_runtime.muted,
 								);
 								*idx += 1;
-								let gr = g.grade();
+								let gr = g.grade_for_hud();
 								if gr > grade_last {
 									play_grade_up(&audio_assets, audio_runtime.muted);
 									grade_up_fx = Some(GradeUpAnim::new());
@@ -1442,6 +1443,7 @@ async fn main() {
 					let hud_time = get_time() as f32;
 					let hud_jolt = hud_vertical_jolt_from_keys();
 					let grade_up_t = grade_up_fx.as_ref().map(|a| a.t01());
+					let control_hints = control_hints_from_keys();
 					draw_gameplay_layer(
 						&font,
 						g,
@@ -1454,6 +1456,7 @@ async fn main() {
 						grade_up_t,
 						score_pulse_fx.as_ref(),
 						section_split_fx.as_ref(),
+						Some(&control_hints),
 					);
 					hud::draw_right_rail(
 						&font,
@@ -1474,6 +1477,7 @@ async fn main() {
 					let hud_time = get_time() as f32;
 					let hud_jolt = hud_vertical_jolt_from_keys();
 					let grade_up_t = grade_up_fx.as_ref().map(|a| a.t01());
+					let control_hints = control_hints_from_keys();
 					draw_gameplay_layer(
 						&font,
 						g,
@@ -1486,6 +1490,7 @@ async fn main() {
 						grade_up_t,
 						score_pulse_fx.as_ref(),
 						section_split_fx.as_ref(),
+						Some(&control_hints),
 					);
 					hud::draw_right_rail(
 						&font,
@@ -1510,6 +1515,7 @@ async fn main() {
 					let hud_time = get_time() as f32;
 					let hud_jolt = hud_vertical_jolt_from_keys();
 					let grade_up_t = grade_up_fx.as_ref().map(|a| a.t01());
+					let control_hints = control_hints_from_keys();
 					draw_gameplay_layer(
 						&font,
 						g,
@@ -1522,6 +1528,7 @@ async fn main() {
 						grade_up_t,
 						score_pulse_fx.as_ref(),
 						section_split_fx.as_ref(),
+						Some(&control_hints),
 					);
 					hud::draw_right_rail(
 						&font,
@@ -1566,6 +1573,7 @@ async fn main() {
 						grade_up_t,
 						score_pulse_fx.as_ref(),
 						section_split_fx.as_ref(),
+						None,
 					);
 					let prog = format!("frame {} / {}", rw.idx, rw.inputs.len());
 					hud::draw_right_rail(
@@ -2518,6 +2526,18 @@ fn draw_title_screen(font: &ArcadeFont, menu_idx: usize) {
 	);
 }
 
+fn control_hints_from_keys() -> ControlHintsState {
+	ControlHintsState {
+		w: is_key_down(KeyCode::W),
+		a: is_key_down(KeyCode::A),
+		s: is_key_down(KeyCode::S),
+		d: is_key_down(KeyCode::D),
+		j: is_key_down(KeyCode::J),
+		k: is_key_down(KeyCode::K),
+		l: is_key_down(KeyCode::L),
+	}
+}
+
 fn poll_input(phase: Phase, pending_cw: &mut u8, pending_ccw: &mut u8) -> Input {
 	let use_hold = matches!(phase, Phase::Are);
 	let (rot_cw, rot_ccw) = if use_hold {
@@ -2684,6 +2704,7 @@ fn draw_gameplay_layer(
 	grade_up_t01: Option<f32>,
 	score_pulse: Option<&ScorePulseAnim>,
 	section_split_fx: Option<&SectionSplitFx>,
+	control_hints: Option<&ControlHintsState>,
 ) {
 	let (sx, sy) = playfield_fx.death_shake();
 	let ox = FIELD_OX_BASE + sx;
@@ -2698,7 +2719,7 @@ fn draw_gameplay_layer(
 		beat_stress,
 		ox,
 		fw,
-		MARGIN + sy + hud_jolt_y,
+		MARGIN + hud::NEXT_BAND_TOP_OFFSET + sy + hud_jolt_y,
 		FIELD_TOP + sy + hud_jolt_y,
 	);
 	hud::draw_timer_below_field(
@@ -2720,6 +2741,7 @@ fn draw_gameplay_layer(
 		hud_jolt_y,
 		grade_up_t01,
 		score_pulse,
+		control_hints,
 	);
 }
 

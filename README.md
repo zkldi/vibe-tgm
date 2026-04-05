@@ -17,6 +17,8 @@ This is a sped up showcase video of autoplay, not me.
 
 https://github.com/user-attachments/assets/4d934a74-d481-4e6e-a88d-946c04dee0ee
 
+n.b. some bugs were fixed after recording this video - most obviously that the
+L and J pieces have the wrong colours
 
 # Total Cost
 
@@ -138,6 +140,12 @@ Absolutely not. Reading this code feels like reading the output of a transpiler
   unexplained floats and integers.
 
 ## Bugs?
+
+### TGM1 shouldn't have sonic drop
+
+It implemented this for me, and hilariously, I didn't even notice it wasn't meant
+to be in the game for like, 2 days. Even now, I'm going to leave it in because
+it's such a colossal QoL improvement that I forgot tgm1 doesn't even have it.
 
 ### Autoplay is just complete dogshit and _really_ computationally heavy
 
